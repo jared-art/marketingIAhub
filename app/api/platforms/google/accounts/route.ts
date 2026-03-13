@@ -1,63 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { refreshGoogleAccessToken } from '@/lib/api/google-ads'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { accessToken, refreshToken, customerId, loginCustomerId } = body
+    const { token, customerId } = body
 
+    if (!token) {
+      return NextResponse.json({ error: 'Token de gaql.app es obligatorio' }, { status: 400 })
+    }
     if (!customerId) {
       return NextResponse.json({ error: 'Customer ID es obligatorio' }, { status: 400 })
     }
-    if (!accessToken && !refreshToken) {
-      return NextResponse.json({ error: 'Access Token o Refresh Token son obligatorios' }, { status: 400 })
-    }
 
-    const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN
-    if (!developerToken) {
-      return NextResponse.json({ error: 'Developer Token no configurado en el servidor' }, { status: 500 })
-    }
+    const cleanId = customerId.replace(/-/g, '')
 
-    // Resolve final access token
-    let resolvedToken = accessToken
-    if (refreshToken) {
-      resolvedToken = await refreshGoogleAccessToken(refreshToken)
-    }
-
-    const cleanCustomerId = customerId.replace(/-/g, '')
-    const cleanLoginId = (loginCustomerId || customerId).replace(/-/g, '')
-
-    const url = `https://googleads.googleapis.com/v17/customers/${cleanCustomerId}/googleAds:search`
-    const res = await fetch(url, {
+    const res = await fetch('https://api.gaql.app/api/google-ads/execute-query', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${resolvedToken}`,
-        'developer-token': developerToken,
-        'login-customer-id': cleanLoginId,
+        'Authorization': `Basic ${token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        customerId: parseInt(cleanId),
+        loginCustomerId: parseInt(cleanId),
         query: 'SELECT customer.descriptive_name, customer.id FROM customer LIMIT 1',
+        reportAggregation: '',
       }),
     })
 
-    const contentType = res.headers.get('content-type') || ''
-    if (!contentType.includes('application/json')) {
-      throw new Error('Token expirado o credenciales inválidas')
-    }
+    const rawText = await res.text()
+    console.log('[gaql.app] status:', res.status, 'body:', rawText)
 
-    const data = await res.json()
+    let data: Record<string, unknown> = {}
+    try { data = JSON.parse(rawText) } catch { /* ignored */ }
+
     if (!res.ok) {
-      const msg = data?.error?.details?.[0]?.errors?.[0]?.message
-        || data?.error?.message
-        || 'Error al verificar Google Ads'
-      throw new Error(msg)
+      const msg = (data?.error as { message?: string })?.message || (data?.message as string) || rawText || 'Token inválido o cuenta no encontrada'
+      throw new Error(`gaql.app ${res.status}: ${msg}`)
     }
 
-    const customer = data.results?.[0]?.customer
+    const results = (data.results as unknown[]) || []
+    const customer = (results[0] as { customer?: { descriptiveName?: string } })?.customer
     return NextResponse.json({
       success: true,
-      customerId: cleanCustomerId,
+      customerId: cleanId,
       customerName: customer?.descriptiveName || `Cuenta ${customerId}`,
     })
   } catch (error) {

@@ -44,7 +44,6 @@ export async function POST(
     await serviceClient.from('analyses').update({ status: 'running' }).eq('id', id)
 
     const connections = analysis.analysis_connections || []
-    const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN || ''
 
     const platformData: {
       meta?: ReturnType<typeof computeMetaSummary> & { campaigns: ReturnType<typeof normalizeCampaigns> }
@@ -88,18 +87,13 @@ export async function POST(
         // ── GOOGLE ADS ────────────────────────────────────────
         if (connection.platform === 'google_ads') {
           const creds = connection.credentials as {
-            accessToken?: string
-            refreshToken?: string
+            token: string
             customerId: string
-            loginCustomerId?: string
           }
           const customerId = connection.selected_account_id || creds.customerId || ''
           const googleCreds = {
-            accessToken: creds.accessToken,
-            refreshToken: creds.refreshToken,
-            developerToken,
+            token: creds.token,
             customerId,
-            loginCustomerId: creds.loginCustomerId,
           }
 
           const gaqlResult = await runGAQLQuery(

@@ -57,9 +57,8 @@ export function PlatformConnector({ platform, onVerified, isConnected, connected
   const [metaSelectedAccount, setMetaSelectedAccount] = useState('')
 
   // Google fields
-  const [googleRefreshToken, setGoogleRefreshToken] = useState('')
+  const [googleToken, setGoogleToken] = useState('')
   const [googleCustomerId, setGoogleCustomerId] = useState('')
-  const [googleLoginCustomerId, setGoogleLoginCustomerId] = useState('')
 
   // HubSpot fields
   const [hubspotToken, setHubspotToken] = useState('')
@@ -108,8 +107,8 @@ export function PlatformConnector({ platform, onVerified, isConnected, connected
   }
 
   const handleVerifyGoogle = async () => {
-    if (!googleRefreshToken || !googleCustomerId) {
-      setError('Refresh Token y Customer ID son obligatorios')
+    if (!googleToken || !googleCustomerId) {
+      setError('Token y Customer ID son obligatorios')
       return
     }
     setLoading(true)
@@ -118,18 +117,13 @@ export function PlatformConnector({ platform, onVerified, isConnected, connected
       const res = await fetch('/api/platforms/google/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          refreshToken: googleRefreshToken,
-          customerId: googleCustomerId,
-          loginCustomerId: googleLoginCustomerId || googleCustomerId,
-        }),
+        body: JSON.stringify({ token: googleToken, customerId: googleCustomerId }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error al verificar')
       onVerified({
-        refreshToken: googleRefreshToken,
+        token: googleToken,
         customerId: googleCustomerId,
-        loginCustomerId: googleLoginCustomerId || googleCustomerId,
         customerName: data.customerName || googleCustomerId,
       })
     } catch (err) {
@@ -285,48 +279,37 @@ export function PlatformConnector({ platform, onVerified, isConnected, connected
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  Refresh Token <span className="text-red-400">*</span>
+                  Token de gaql.app <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="password"
-                  value={googleRefreshToken}
-                  onChange={(e) => setGoogleRefreshToken(e.target.value)}
-                  placeholder="1//0gABcd..."
+                  value={googleToken}
+                  onChange={(e) => setGoogleToken(e.target.value)}
+                  placeholder="Pega aquí tu token de gaql.app"
                   className="w-full bg-[#0A0F1E] border border-[#1F2937] rounded-lg px-3 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 text-sm"
                 />
                 <p className="text-gray-600 text-xs mt-1">
-                  Token permanente de OAuth 2.0. Obtén el tuyo en{' '}
-                  <a href="https://developers.google.com/oauthplayground" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">
-                    OAuth Playground
+                  Ve a{' '}
+                  <a href="https://gaql.app" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">
+                    gaql.app
                   </a>
-                  {' '}(scope: <code className="text-gray-500">https://www.googleapis.com/auth/adwords</code>)
+                  , inicia sesión con tu cuenta de Google y copia el token
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                    Customer ID <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={googleCustomerId}
-                    onChange={(e) => setGoogleCustomerId(e.target.value)}
-                    placeholder="123-456-7890"
-                    className="w-full bg-[#0A0F1E] border border-[#1F2937] rounded-lg px-3 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                    Login Customer ID <span className="text-gray-500">(MCC, opcional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={googleLoginCustomerId}
-                    onChange={(e) => setGoogleLoginCustomerId(e.target.value)}
-                    placeholder="987-654-3210"
-                    className="w-full bg-[#0A0F1E] border border-[#1F2937] rounded-lg px-3 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 text-sm"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                  Customer ID <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={googleCustomerId}
+                  onChange={(e) => setGoogleCustomerId(e.target.value)}
+                  placeholder="1234567890"
+                  className="w-full bg-[#0A0F1E] border border-[#1F2937] rounded-lg px-3 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 text-sm"
+                />
+                <p className="text-gray-600 text-xs mt-1">
+                  Número de cuenta de Google Ads sin guiones
+                </p>
               </div>
 
               {error && (

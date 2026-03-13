@@ -1,33 +1,8 @@
 export interface GoogleCreds {
-  accessToken?: string
-  refreshToken?: string
-  developerToken: string
+  token: string       // Token obtenido en gaql.app
   customerId: string
-  loginCustomerId?: string
 }
 
-export async function refreshGoogleAccessToken(refreshToken: string): Promise<string> {
-  const clientId = process.env.GOOGLE_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-  if (!clientId || !clientSecret) {
-    throw new Error('GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET no están configurados en el servidor')
-  }
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-    }),
-  })
-  const data = await res.json()
-  if (!res.ok || !data.access_token) {
-    throw new Error(data.error_description || data.error || 'Error al renovar el token de Google')
-  }
-  return data.access_token as string
-}
 
 export interface GoogleCampaignRow {
   id: string
@@ -62,31 +37,19 @@ export interface KeywordInsights {
 
 export async function runGAQLQuery(creds: GoogleCreds, query: string) {
   const cleanId = creds.customerId.replace(/-/g, '')
-  const cleanLoginId = (creds.loginCustomerId || creds.customerId).replace(/-/g, '')
-  const url = `https://googleads.googleapis.com/v17/customers/${cleanId}/googleAds:search`
-
-  // Prefer refreshToken (long-lived) over accessToken (1h expiry)
-  let accessToken = creds.accessToken
-  if (creds.refreshToken) {
-    accessToken = await refreshGoogleAccessToken(creds.refreshToken)
-  }
-  if (!accessToken) throw new Error('Se requiere accessToken o refreshToken para Google Ads')
-
-  const headers: Record<string, string> = {
-    'Authorization': `Bearer ${accessToken}`,
-    'developer-token': creds.developerToken,
-    'login-customer-id': cleanLoginId,
-    'Content-Type': 'application/json',
-  }
-
-  const res = await fetch(url, {
+  const res = await fetch('https://api.gaql.app/api/google-ads/execute-query', {
     method: 'POST',
-    headers,
-    body: JSON.stringify({ query }),
+    headers: {
+      'Authorization': `Basic ${creds.token}`,
+      'Content-Type': 'application/json',
+      'Origin': 'https://gaql.app',
+      'Referer': 'https://gaql.app/',
+    },
+    body: JSON.stringify({ customerId: parseInt(cleanId), loginCustomerId: parseInt(cleanId), query, reportAggregation: '' }),
   })
   if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.error?.message || 'GAQL query failed')
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error?.message || err.message || 'GAQL query failed')
   }
   return res.json()
 }
@@ -120,7 +83,7 @@ export function normalizeGoogleCampaigns(campaigns: unknown[]): GoogleCampaignRo
     .sort((a, b) => b.spend - a.spend)
 }
 
-export async function getGoogleKeywords(creds: GoogleCreds, dateStart: string, dateEnd: string) {
+export async function getGoogleKeywords(creds: GoogleCreds, dateStart: string, dateEnd: string): Promise<{ results: unknown[] }> {
   const query = `
     SELECT
       ad_group_criterion.keyword.text,
